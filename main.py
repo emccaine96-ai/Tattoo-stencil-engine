@@ -38,8 +38,8 @@ def process_stencil_core(img_gray, style, line_weight, noise_reduction, contrast
 
     elif style == "detailed":
         # Ridge Detection via Hessian Matrix eigenvalues (Isolates exact line structures)
-        hxx, hxy, hyy = hessian_matrix(adjusted, sigma=line_weight, order='rc')
-        _, i2 = hessian_matrix_eigvals(hxx, hxy, hyy)
+        H_elems = hessian_matrix(adjusted, sigma=line_weight, order='rc')
+        i1, i2 = hessian_matrix_eigvals(H_elems)
         
         ridges = np.uint8(cv2.normalize(i2, None, 0, 255, cv2.NORM_MINMAX))
         ridges = cv2.bitwise_not(ridges)
