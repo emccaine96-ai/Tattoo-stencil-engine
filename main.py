@@ -1,6 +1,7 @@
 import io
 import cv2
 import numpy as np
+from PIL import Image, ImageEnhance, ImageFilter, ImageDraw
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException
 from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
@@ -57,14 +58,99 @@ def process_stencil_core(img_gray, style, line_weight, noise_reduction, contrast
             cv2.THRESH_BINARY, 15, 7
         )
 
+def apply_stencil_filter(pil_image, filter_type):
+    """
+    Apply various stencil finish filters to match classic thermal stencil paper effects.
+    Filters mimic the Stencil AI app from Play Store.
+    """
+    if filter_type == "classic":
+        # Pure thermal paper look: crisp black lines on white
+        return pil_image
+    
+    elif filter_type == "thermal_ink":
+        # Slightly darkened lines for classic thermal printer effect
+        enhancer = ImageEnhance.Brightness(pil_image)
+        return enhancer.enhance(0.92)
+    
+    elif filter_type == "carbon_transfer":
+        # Deep purple/burgundy lines (like carbon transfer paper)
+        # Convert to RGB and apply color overlay
+        img_array = np.array(pil_image)
+        rgb_array = cv2.cvtColor(img_array, cv2.COLOR_GRAY2BGR)
+        
+        # Apply purple tint to dark lines
+        purple_mask = img_array < 128
+        rgb_array[purple_mask] = [128, 46, 74]  # BGR: Purple (#4A2E80)
+        
+        return Image.fromarray(cv2.cvtColor(rgb_array, cv2.COLOR_BGR2RGB))
+    
+    elif filter_type == "bold":
+        # Thicker, bolder stencil lines
+        img_array = np.array(pil_image)
+        kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+        dilated = cv2.dilate(img_array, kernel, iterations=1)
+        return Image.fromarray(dilated)
+    
+    elif filter_type == "smooth":
+        # Smoothed edges for cleaner appearance
+        return pil_image.filter(ImageFilter.SMOOTH)
+    
+    elif filter_type == "sharp":
+        # Extra sharp lines for maximum detail
+        return pil_image.filter(ImageFilter.SHARPEN)
+    
+    elif filter_type == "duotone_purple":
+        # Two-tone purple effect (light and dark)
+        img_array = np.array(pil_image)
+        # Create a duotone effect
+        duotone = np.where(
+            img_array > 200,
+            np.array([240, 240, 240]),  # Light gray for white areas
+            np.array([100, 60, 100])     # Dark purple for lines
+        )
+        return Image.fromarray(duotone)
+    
+    elif filter_type == "sketchy":
+        # Hand-drawn sketchy appearance
+        img_array = np.array(pil_image)
+        # Add slight noise and edge enhancement
+        noise = np.random.randint(-15, 15, img_array.shape)
+        sketchy = np.clip(img_array.astype(int) + noise, 0, 255).astype(np.uint8)
+        return Image.fromarray(sketchy)
+    
+    elif filter_type == "high_contrast":
+        # Maximum contrast for bold stencil effect
+        enhancer = ImageEnhance.Contrast(pil_image)
+        enhanced = enhancer.enhance(2.0)
+        enhancer = ImageEnhance.Brightness(enhanced)
+        return enhancer.enhance(0.95)
+    
+    else:
+        return pil_image
+
 @app.post("/api/v1/generate-stencil/")
 async def generate_stencil(
     file: UploadFile = File(...),
     style: str = Form("detailed"),           
     line_weight: float = Form(2.0),          
     noise_reduction: float = Form(1.0),      
-    contrast_boost: float = Form(1.2)        
+    contrast_boost: float = Form(1.2),
+    filter_type: str = Form("classic")
 ):
+    """
+    Generate tattoo stencils with multiple filter options.
+    
+    Filter types:
+    - classic: Pure thermal paper look (default)
+    - thermal_ink: Slightly darkened thermal printer effect
+    - carbon_transfer: Deep purple/burgundy lines
+    - bold: Thicker, bolder lines
+    - smooth: Smoothed edges
+    - sharp: Extra sharp detail
+    - duotone_purple: Two-tone purple effect
+    - sketchy: Hand-drawn sketchy appearance
+    - high_contrast: Maximum bold contrast
+    """
     try:
         contents = await file.read()
         nparr = np.frombuffer(contents, np.uint8)
@@ -76,21 +162,46 @@ async def generate_stencil(
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         processed_gray = process_stencil_core(gray, style, line_weight, noise_reduction, contrast_boost)
 
-        # 4. Background Stripping Layer (Alpha Channel Masking)
-        rgba = cv2.cvtColor(processed_gray, cv2.COLOR_GRAY2BGRA)
+        # Create white background image
+        height, width = processed_gray.shape
+        white_bg = np.ones((height, width, 3), dtype=np.uint8) * 255  # Pure white in BGR
         
-        # Turn white background pixels completely transparent
-        white_mask = (rgba[:, :, 0] == 255) & (rgba[:, :, 1] == 255) & (rgba[:, :, 2] == 255)
-        rgba[white_mask, 3] = 0  
-
-        # Apply standard carbon-transfer purple (#4A2E80) to remaining lines
-        line_mask = (rgba[:, :, 3] > 0)
-        rgba[line_mask, 0] = 128  # Blue Channel
-        rgba[line_mask, 1] = 46   # Green Channel
-        rgba[line_mask, 2] = 74   # Red Channel
-
-        _, encoded_png = cv2.imencode('.png', rgba)
-        return Response(content=encoded_png.tobytes(), media_type="image/png")
+        # Create binary mask: 255 where stencil lines are (black), 0 where white
+        stencil_mask = cv2.bitwise_not(processed_gray)
+        
+        # Place black lines on white background
+        for i in range(3):  # Apply to all color channels
+            white_bg[:, :, i] = cv2.bitwise_and(white_bg[:, :, i], stencil_mask)
+        
+        # Invert to get white background with black lines
+        result = cv2.bitwise_not(white_bg)
+        result = 255 - (255 - result)  # Ensure proper white background
+        
+        # Convert to grayscale for filter processing
+        result_gray = cv2.cvtColor(result, cv2.COLOR_BGR2GRAY)
+        
+        # Convert to PIL Image for advanced filter processing
+        pil_image = Image.fromarray(result_gray, mode='L')
+        
+        # Apply selected filter
+        filtered_image = apply_stencil_filter(pil_image, filter_type)
+        
+        # Create final white background composite
+        white_background = Image.new('RGB', filtered_image.size, (255, 255, 255))
+        
+        # If the image is in grayscale mode, paste it with a mask
+        if filtered_image.mode == 'L':
+            white_background.paste(filtered_image, (0, 0), filtered_image)
+        else:
+            # If RGB, compose them together
+            white_background.paste(filtered_image, (0, 0))
+        
+        # Save to PNG bytes
+        png_buffer = io.BytesIO()
+        white_background.save(png_buffer, format='PNG')
+        png_buffer.seek(0)
+        
+        return Response(content=png_buffer.getvalue(), media_type="image/png")
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
