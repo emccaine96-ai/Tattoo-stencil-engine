@@ -127,37 +127,46 @@ def insert_bridges(binary_image, line_weight=2.0):
     Structural integrity algorithm: detects floating islands and inserts
     'bridges' (small breaks in outline) to maintain connectivity.
     Critical for printable stencils.
+    
+    IMPORTANT: Input should be binary image where 255=black lines, 0=white background
+    Output maintains the same convention
     """
-    # Invert for analysis
-    inverted = 255 - binary_image
+    # Work with the image as-is (don't invert)
+    working = binary_image.copy()
     
-    # Detect floating islands in the inverted image
-    labeled, stats = detect_floating_islands(inverted > 128)
+    # Detect floating islands (look for enclosed white regions)
+    white_regions = (working < 128).astype(np.uint8)
+    labeled, stats = detect_floating_islands(white_regions)
     
-    result = binary_image.copy()
+    result = working.copy()
     
-    # For each island, find its nearest neighbor and create a bridge
+    # For each island, find its boundary and create a bridge
     for island_id, island_data in stats.items():
         if island_data['area'] < 50:  # Skip very small components
             continue
         
         # Find boundary pixels of this island
         component = island_data['component']
-        boundary = cv2.dilate(component.astype(np.uint8) * 255, 
-                              cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))) - \
-                   cv2.erode(component.astype(np.uint8) * 255,
+        dilation = cv2.dilate(component.astype(np.uint8) * 255,
                              cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3)))
+        erosion = cv2.erode(component.astype(np.uint8) * 255,
+                           cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3)))
+        boundary = dilation - erosion
         
         boundary_pixels = np.where(boundary > 0)
         if len(boundary_pixels[0]) == 0:
             continue
         
-        # Find closest pixel to nearest island
-        for y, x in zip(boundary_pixels[0], boundary_pixels[1]):
-            # Create small bridge by thinning the line at boundary
-            if np.random.random() < 0.1:  # 10% of boundary pixels become bridges
-                radius = max(1, int(line_weight))
-                cv2.circle(result, (x, y), radius, 255, -1)
+        # Create bridges at random boundary points (~10%)
+        bridge_indices = np.random.choice(len(boundary_pixels[0]), 
+                                         max(1, len(boundary_pixels[0]) // 10),
+                                         replace=False)
+        
+        for idx in bridge_indices:
+            y, x = boundary_pixels[0][idx], boundary_pixels[1][idx]
+            radius = max(1, int(line_weight))
+            # Make the bridge lighter (cut through the line)
+            cv2.circle(result, (x, y), radius, 200, -1)
     
     return result
 
@@ -174,6 +183,10 @@ def trace_contours_to_vectors(binary_image, max_error=1.0):
     - Lossless scaling to any size
     - SVG export for laser cutters
     - Sub-pixel precision
+    
+    Parameters:
+    - binary_image: Binary image (0-255)
+    - max_error: Douglas-Peucker approximation error (default 1.0)
     """
     # Find contours
     contours, hierarchy = cv2.findContours(binary_image, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
@@ -286,8 +299,11 @@ def filter_classic(img_gray, line_weight, noise_reduction, contrast_boost):
         if cv2.contourArea(contour) > min_area:
             cv2.drawContours(clean, [contour], 0, 255, 1)
     
+    # Result: black lines on white background
+    result = clean
+    
     # Insert bridges for structural integrity
-    result = insert_bridges(255 - clean, line_weight)
+    result = insert_bridges(result, line_weight)
     
     return result
 
@@ -352,8 +368,8 @@ def filter_sketchy(img_gray, line_weight, noise_reduction, contrast_boost):
     
     result = cv2.bitwise_or(result, clean_contours)
     
-    # Bridges
-    result = insert_bridges(255 - result, line_weight)
+    # Insert bridges for structural integrity (result is already black lines on white)
+    result = insert_bridges(result, line_weight)
     
     return result
 
@@ -373,7 +389,7 @@ def filter_smooth(img_gray, line_weight, noise_reduction, contrast_boost):
     # Invert for stipple
     inverted = 255 - enhanced
     
-    # Ordered dithering
+    # Ordered dithering (Bayer 4x4)
     bayer_4x4 = np.array([
         [0, 8, 2, 10],
         [12, 4, 14, 6],
@@ -400,7 +416,7 @@ def filter_smooth(img_gray, line_weight, noise_reduction, contrast_boost):
     
     result = cv2.bitwise_or(dithered, clean_contours)
     
-    # Bridges
+    # Insert bridges for structural integrity
     result = insert_bridges(result, line_weight)
     
     return result
@@ -411,7 +427,8 @@ def filter_thermal_ink(img_gray, line_weight, noise_reduction, contrast_boost):
     edges = hybrid_edge_detection(enhanced, contrast_boost)
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (int(line_weight * 2 + 1), int(line_weight * 2 + 1)))
     dilated = cv2.dilate(edges, kernel, iterations=1)
-    return 255 - dilated
+    result = insert_bridges(dilated, line_weight)
+    return result
 
 def filter_carbon_transfer(img_gray, line_weight, noise_reduction, contrast_boost):
     """Hand-Traced Carbon with texture and adaptive threshold."""
@@ -507,7 +524,7 @@ def process_stencil_core(img_gray, style, line_weight, noise_reduction, contrast
     else:
         return filter_classic(img_gray, line_weight, noise_reduction, contrast_boost)
 
-@app.post("/api/v1/generate-stencil/")
+@app.post("/generate")
 async def generate_stencil(
     file: UploadFile = File(...),
     style: str = Form("classic"),
@@ -563,7 +580,7 @@ async def generate_stencil(
             # Generate vectorized SVG
             gray_binary = cv2.cvtColor(result_img, cv2.COLOR_RGB2GRAY)
             _, binary = cv2.threshold(gray_binary, 128, 255, cv2.THRESH_BINARY)
-            vectors = trace_contours_to_vectors(binary)
+            vectors = trace_contours_to_vectors(binary, max_error=1.0)
             svg_content = generate_svg_from_vectors(vectors, w, h)
             return Response(content=svg_content, media_type="image/svg+xml")
         else:
@@ -576,7 +593,7 @@ async def generate_stencil(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
 
-@app.get("/api/v1/health")
+@app.get("/health")
 async def health_check():
     return {
         "status": "healthy",
