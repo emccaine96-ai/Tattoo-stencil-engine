@@ -11,7 +11,7 @@ from skimage.measure import find_contours
 import warnings
 warnings.filterwarnings('ignore')
 
-app = FastAPI(title="AI-Powered Professional Tattoo Stencil Engine")
+app = FastAPI(title="Tattoo Stencil Engine")
 
 app.add_middleware(
     CORSMiddleware,
@@ -20,6 +20,70 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ============================================================================
+# ROOT ENDPOINTS - Required for frontend connection
+# ============================================================================
+
+@app.get("/")
+async def root():
+    """
+    Root endpoint - Frontend entry point
+    """
+    return {
+        "status": "online",
+        "message": "Tattoo Stencil Engine is running ✅",
+        "version": "2.0",
+        "docs": "/docs",
+        "endpoints": {
+            "root": "/",
+            "health": "/health",
+            "status": "/status",
+            "generate": "/generate"
+        }
+    }
+
+@app.get("/health")
+async def health_check():
+    """
+    Health check endpoint
+    """
+    return {
+        "status": "healthy",
+        "engine": "AI-Powered Professional Tattoo Stencil Engine",
+        "version": "2.0",
+        "features": [
+            "U-Net Segmentation",
+            "Hybrid Edge Detection",
+            "Adaptive Contrast Enhancement",
+            "Topological Bridge Insertion",
+            "Potrace Vectorization",
+            "SVG Export"
+        ]
+    }
+
+@app.get("/status")
+async def status():
+    """
+    Detailed status endpoint
+    """
+    return {
+        "status": "running",
+        "server": "online",
+        "api_version": "v2.0",
+        "stencil_filters": [
+            "classic",
+            "sketchy",
+            "smooth",
+            "thermal_ink",
+            "carbon_transfer",
+            "bold",
+            "sharp",
+            "duotone_purple",
+            "high_contrast"
+        ],
+        "output_formats": ["png", "svg"]
+    }
 
 # ============================================================================
 # ADVANCED SEGMENTATION: U-Net-like foreground/background separation
@@ -592,21 +656,6 @@ async def generate_stencil(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error: {str(e)}")
-
-@app.get("/health")
-async def health_check():
-    return {
-        "status": "healthy",
-        "engine": "AI-Powered Professional Tattoo Stencil Engine",
-        "features": [
-            "U-Net Segmentation",
-            "Hybrid Edge Detection",
-            "Adaptive Contrast Enhancement",
-            "Topological Bridge Insertion",
-            "Potrace Vectorization",
-            "SVG Export"
-        ]
-    }
 
 if __name__ == "__main__":
     import uvicorn
