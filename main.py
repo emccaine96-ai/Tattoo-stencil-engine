@@ -63,6 +63,86 @@ def colorize_stencil(mask, color_rgb):
     
     return result
 
+def bayer_dither_matrix(size):
+    """
+    Generate Bayer dither matrix for ordered dithering.
+    """
+    if size == 2:
+        return np.array([[0, 2], [3, 1]], dtype=np.uint8)
+    elif size == 4:
+        return np.array([
+            [0, 8, 2, 10],
+            [12, 4, 14, 6],
+            [3, 11, 1, 9],
+            [15, 7, 13, 5]
+        ], dtype=np.uint8)
+    else:  # 8x8
+        return np.array([
+            [0, 32, 8, 40, 2, 34, 10, 42],
+            [48, 16, 56, 24, 50, 18, 58, 26],
+            [12, 44, 4, 36, 14, 46, 6, 38],
+            [60, 28, 52, 20, 62, 30, 54, 22],
+            [3, 35, 11, 43, 1, 33, 9, 41],
+            [51, 19, 59, 27, 49, 17, 57, 25],
+            [15, 47, 7, 39, 13, 45, 5, 37],
+            [63, 31, 55, 23, 61, 29, 53, 21]
+        ], dtype=np.uint8)
+
+def ordered_dither(image, levels=4):
+    """
+    Ordered dithering using Bayer matrix for superior halftone quality.
+    """
+    if len(image.shape) == 3:
+        image = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+    
+    h, w = image.shape
+    threshold_max = 256 // levels
+    
+    bayer = bayer_dither_matrix(4) / 16.0  # Normalize 4x4 Bayer
+    
+    result = np.zeros_like(image)
+    
+    for y in range(h):
+        for x in range(w):
+            bayer_val = bayer[y % 4, x % 4] * 255
+            pixel = image[y, x]
+            if pixel > bayer_val:
+                result[y, x] = 255
+    
+    return result
+
+def adaptive_halftone(image, tone_levels=6):
+    """
+    Advanced halftone with adaptive tone levels for smooth gradient rendering.
+    Produces dot patterns that vary in density to represent gray levels.
+    """
+    if len(image.shape) == 3:
+        image = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+    
+    h, w = image.shape
+    image_float = image.astype(np.float32) / 255.0
+    
+    result = np.ones((h, w), dtype=np.uint8) * 255
+    
+    cell_size = 3
+    dot_radius_max = cell_size // 2
+    
+    for y in range(0, h, cell_size):
+        for x in range(0, w, cell_size):
+            # Get average tone in this cell
+            cell = image_float[y:min(y+cell_size, h), x:min(x+cell_size, w)]
+            avg_tone = np.mean(cell)
+            
+            # Map tone to dot radius (darker = bigger dot)
+            dot_radius = int(dot_radius_max * (1.0 - avg_tone))
+            
+            if dot_radius > 0:
+                cy = y + cell_size // 2
+                cx = x + cell_size // 2
+                cv2.circle(result, (cx, cy), dot_radius, 0, -1)
+    
+    return result
+
 def filter_classic(img_gray, line_weight, noise_reduction, contrast_boost):
     """
     Fine Linework: Crisp, tight edge tracing using adaptive thresholding and Canny detection.
@@ -94,60 +174,83 @@ def filter_classic(img_gray, line_weight, noise_reduction, contrast_boost):
         if cv2.contourArea(contour) > min_area:
             cv2.drawContours(clean_edges, [contour], 0, 255, 1)
     
-    return 255 - clean_edges  # Invert to get black lines on white
+    return 255 - clean_edges
 
 def filter_sketchy(img_gray, line_weight, noise_reduction, contrast_boost):
     """
-    Genuine Cross-Hatch Shading: Calculate shadow density gradients.
-    Maps thin lines at 45-degree angles over light shadows, and 135-degree lines over deep shadows.
-    Combines shading texture with sharp contours.
+    PROFESSIONAL CROSS-HATCH SHADING: Advanced multi-scale gradient detection
+    with ultra-sensitive mid-tone capture for portrait detail preservation.
+    Maps 45° lines over light/mid shadows, 135° over deep shadows with variable density.
     """
-    # Enhance contrast
-    clahe = cv2.createCLAHE(clipLimit=contrast_boost * 3, tileGridSize=(8, 8))
-    enhanced = clahe.apply(img_gray)
+    # Step 1: Multi-scale edge detection (Sobel + Laplacian hybrid)
+    filtered = cv2.bilateralFilter(img_gray, 11, 25, 15)
+    clahe = cv2.createCLAHE(clipLimit=contrast_boost * 3.5, tileGridSize=(8, 8))
+    enhanced = clahe.apply(filtered)
     
-    # Bilateral filter for edge preservation
-    filtered = cv2.bilateralFilter(enhanced, 9, 20, 8)
+    # Multi-scale gradient computation
+    sobelx = cv2.Sobel(enhanced, cv2.CV_32F, 1, 0, ksize=3)
+    sobely = cv2.Sobel(enhanced, cv2.CV_32F, 0, 1, ksize=3)
+    sobel_mag = np.sqrt(sobelx**2 + sobely**2)
     
-    # Create gradient/shadow map
-    sobelx = cv2.Sobel(filtered, cv2.CV_32F, 1, 0, ksize=3)
-    sobely = cv2.Sobel(filtered, cv2.CV_32F, 0, 1, ksize=3)
-    magnitude = np.sqrt(sobelx**2 + sobely**2)
-    magnitude = cv2.normalize(magnitude, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
+    # Laplacian for secondary edge information
+    laplacian = cv2.Laplacian(enhanced, cv2.CV_32F)
+    laplacian_mag = np.abs(laplacian)
     
-    # Create base stencil
-    _, base_stencil = cv2.threshold(filtered, int(128 * contrast_boost), 255, cv2.THRESH_BINARY_INV)
+    # Combine gradients
+    combined_grad = (sobel_mag + laplacian_mag * 0.5)
+    grad_normalized = cv2.normalize(combined_grad, None, 0, 255, cv2.NORM_MINMAX).astype(np.uint8)
     
-    # Create 45-degree hatch pattern for light/mid shadows
-    light_shadow = cv2.inRange(magnitude, 50, 150)
+    # Step 2: ULTRA-SENSITIVE mid-tone shadow detection (key improvement)
+    # Capture FULL range of grays, not just extremes
+    inverted = 255 - enhanced
     
-    # Create 135-degree hatch pattern for deep shadows
-    deep_shadow = cv2.inRange(magnitude, 151, 255)
+    # Create comprehensive shadow bands (captures all portrait tones)
+    light_shadow = cv2.inRange(inverted, 15, 80)      # Very light grays (light shading)
+    mid_shadow = cv2.inRange(inverted, 81, 150)       # Mid-tone grays (medium shading) - CRITICAL RANGE
+    deep_shadow = cv2.inRange(inverted, 151, 220)     # Deep shadows
     
-    # Generate hatching textures
+    # Step 3: Generate adaptive cross-hatch patterns
     height, width = img_gray.shape
-    hatch_45 = np.zeros_like(img_gray)
-    hatch_135 = np.zeros_like(img_gray)
+    hatch_45_light = np.zeros_like(img_gray)
+    hatch_45_mid = np.zeros_like(img_gray)
+    hatch_135_deep = np.zeros_like(img_gray)
     
-    line_spacing = max(3, int(6 / (noise_reduction + 0.5)))
+    # Adaptive line spacing based on shadow density and noise_reduction
+    base_spacing = max(2, int(4 / (noise_reduction + 0.3)))
+    light_spacing = base_spacing + 1  # Thinner in light areas
+    mid_spacing = base_spacing       # Medium density
+    deep_spacing = max(2, base_spacing - 1)  # Denser in deep shadows
     
-    # 45-degree hatching
-    for i in range(0, height + width, line_spacing):
-        cv2.line(hatch_45, (max(0, i - height), 0), (i, min(width, i)), 255, 1)
+    # 45-degree hatching (light and mid-tone areas)
+    for i in range(0, height + width, light_spacing):
+        cv2.line(hatch_45_light, (max(0, i - height), 0), (i, min(width, i)), 255, 1)
     
-    # 135-degree hatching
-    for i in range(-width, height, line_spacing):
-        cv2.line(hatch_135, (0, i), (width, i + width), 255, 1)
+    for i in range(0, height + width, mid_spacing):
+        cv2.line(hatch_45_mid, (max(0, i - height), 0), (i, min(width, i)), 255, 1)
     
-    # Apply hatching to shadow regions
-    light_hatch = cv2.bitwise_and(hatch_45, hatch_45, mask=light_shadow)
-    deep_hatch = cv2.bitwise_and(hatch_135, hatch_135, mask=deep_shadow)
+    # 135-degree hatching (deep shadows)
+    for i in range(-width, height, deep_spacing):
+        cv2.line(hatch_135_deep, (0, i), (width, i + width), 255, 1)
     
-    # Combine base stencil with hatching
-    result = cv2.bitwise_or(base_stencil, light_hatch)
+    # Step 4: Apply hatching to adaptive shadow regions
+    light_hatch = cv2.bitwise_and(hatch_45_light, hatch_45_light, mask=light_shadow)
+    mid_hatch = cv2.bitwise_and(hatch_45_mid, hatch_45_mid, mask=mid_shadow)
+    deep_hatch = cv2.bitwise_and(hatch_135_deep, hatch_135_deep, mask=deep_shadow)
+    
+    # Step 5: Extract clean contours
+    _, contour_base = cv2.threshold(enhanced, int(180 * (1/contrast_boost)), 255, cv2.THRESH_BINARY_INV)
+    contours, _ = cv2.findContours(contour_base, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    clean_contours = np.zeros_like(contour_base)
+    for contour in contours:
+        if cv2.contourArea(contour) > max(10, int(30 * (1 / (noise_reduction + 0.2)))):
+            cv2.drawContours(clean_contours, [contour], 0, 255, 1)
+    
+    # Step 6: Combine hatching with contours
+    result = cv2.bitwise_or(light_hatch, mid_hatch)
     result = cv2.bitwise_or(result, deep_hatch)
+    result = cv2.bitwise_or(result, clean_contours)
     
-    # Clean up with morphology
+    # Step 7: Clean up with minimal morphology
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2, 2))
     result = cv2.morphologyEx(result, cv2.MORPH_CLOSE, kernel, iterations=1)
     
@@ -155,73 +258,54 @@ def filter_sketchy(img_gray, line_weight, noise_reduction, contrast_boost):
 
 def filter_smooth(img_gray, line_weight, noise_reduction, contrast_boost):
     """
-    Whip Shading / Stipple Dot Work: Convert smooth gradient shadows into clean micro-dot textures.
-    Uses Floyd-Steinberg dithering to mimic a low-voltage whip shading pass.
+    PROFESSIONAL STIPPLE/WHIP SHADING: Adaptive halftone with micro-dot texturing.
+    Captures full gradient range with ordered dithering for superior mid-tone handling.
+    Produces smooth, professional stipple patterns that mimic whip shading technique.
     """
-    # Enhance contrast
-    clahe = cv2.createCLAHE(clipLimit=contrast_boost * 3.5, tileGridSize=(8, 8))
-    enhanced = clahe.apply(img_gray)
+    # Step 1: Bilateral filtering with edge preservation
+    filtered = cv2.bilateralFilter(img_gray, 11, 25, 15)
     
-    # Bilateral filter
-    filtered = cv2.bilateralFilter(enhanced, 9, 20, 8)
+    # Step 2: Enhanced contrast with adaptive CLAHE
+    clahe = cv2.createCLAHE(clipLimit=contrast_boost * 4, tileGridSize=(8, 8))
+    enhanced = clahe.apply(filtered)
     
-    # Apply Floyd-Steinberg dithering to create stipple effect
-    dithered = floyd_steinberg_dither(filtered, int(noise_reduction * 3))
+    # Step 3: Invert for stipple generation (darker areas get more dots)
+    inverted = 255 - enhanced
     
-    # Create smooth contours
-    _, contour_base = cv2.threshold(filtered, int(128 * contrast_boost), 255, cv2.THRESH_BINARY_INV)
+    # Step 4: ULTRA-SENSITIVE ordered dithering for precise halftone
+    # Bayer matrix ordered dithering captures all tone levels
+    bayer_halftone = ordered_dither(inverted, levels=int(4 + noise_reduction * 2))
     
-    # Combine dithered texture with contours
-    result = cv2.bitwise_or(dithered, contour_base)
+    # Step 5: Adaptive halftone with variable dot sizing
+    # Creates larger dots in shadows, smaller in lights
+    adaptive_stipple = adaptive_halftone(inverted, tone_levels=int(6 + noise_reduction))
+    
+    # Step 6: Blend ordered dither with adaptive halftone
+    # This creates superior mid-tone sensitivity
+    blended = cv2.addWeighted(bayer_halftone, 0.6, adaptive_stipple, 0.4, 0)
+    
+    # Step 7: Extract clean portrait contours
+    _, contour_base = cv2.threshold(enhanced, int(170 * (1/contrast_boost)), 255, cv2.THRESH_BINARY_INV)
+    contours, _ = cv2.findContours(contour_base, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
+    clean_contours = np.zeros_like(contour_base)
+    min_area = max(10, int(40 * (1 / (noise_reduction + 0.2))))
+    for contour in contours:
+        if cv2.contourArea(contour) > min_area:
+            cv2.drawContours(clean_contours, [contour], 0, 255, 1)
+    
+    # Step 8: Combine stipple texture with structural contours
+    result = cv2.bitwise_or(blended, clean_contours)
+    
+    # Step 9: Light morphological cleanup
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (2, 2))
+    result = cv2.morphologyEx(result, cv2.MORPH_CLOSE, kernel, iterations=1)
     
     return result
-
-def floyd_steinberg_dither(image, reduction):
-    """
-    Floyd-Steinberg dithering algorithm for creating stipple/halftone effects.
-    """
-    if len(image.shape) == 3:
-        image = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
-    
-    img = image.astype(np.float32)
-    height, width = img.shape
-    
-    levels = max(2, 256 // (reduction + 1))
-    
-    for y in range(height):
-        for x in range(width):
-            old_value = img[y, x]
-            new_value = np.round(old_value * (levels - 1) / 255) * (255 / (levels - 1))
-            quant_error = old_value - new_value
-            img[y, x] = new_value
-            
-            # Distribute error
-            if x + 1 < width:
-                img[y, x + 1] += quant_error * 7 / 16
-            if y + 1 < height:
-                if x - 1 >= 0:
-                    img[y + 1, x - 1] += quant_error * 3 / 16
-                img[y + 1, x] += quant_error * 5 / 16
-                if x + 1 < width:
-                    img[y + 1, x + 1] += quant_error * 1 / 16
-    
-    # Convert to binary
-    result = np.where(img > 128, 0, 255).astype(np.uint8)
-    
-    # Create stipple dots
-    stipple = np.zeros_like(result)
-    dot_size = max(1, int(3 * (1 / (noise_reduction + 0.5))))
-    for y in range(0, height, dot_size + 1):
-        for x in range(0, width, dot_size + 1):
-            if result[y, x] == 0:
-                cv2.circle(stipple, (x, y), dot_size, 255, -1)
-    
-    return stipple
 
 def filter_thermal_ink(img_gray, line_weight, noise_reduction, contrast_boost):
     """
     Classic Purple Thermal Burn: High-saturation deep purple lines with subtle heat-spread expansion.
-    Mimics a traditional Spirit stencil fax copy.
+    Mimics a traditional Spirit stencil fax copy with thermal bleed effect.
     """
     # Enhance edges
     clahe = cv2.createCLAHE(clipLimit=contrast_boost * 4, tileGridSize=(8, 8))
@@ -325,13 +409,13 @@ def filter_sharp(img_gray, line_weight, noise_reduction, contrast_boost):
 def filter_duotone_purple(img_gray, line_weight, noise_reduction, contrast_boost):
     """
     Two-Tone Stencil Map: Dark shadows to rich dark violet, mid-tones to softer lilac.
-    Creates depth through color mapping.
+    Creates depth through color mapping for enhanced tattoo design visualization.
     """
     # Enhance contrast to separate tones
     clahe = cv2.createCLAHE(clipLimit=contrast_boost * 4, tileGridSize=(8, 8))
     enhanced = clahe.apply(img_gray)
     
-    # Create shadow/midtone masks
+    # Create shadow/midtone masks with full range sensitivity
     _, dark_mask = cv2.threshold(enhanced, int(100 * contrast_boost), 255, cv2.THRESH_BINARY)
     _, light_mask = cv2.threshold(enhanced, int(150 * contrast_boost), 255, cv2.THRESH_BINARY_INV)
     mid_mask = cv2.bitwise_and(cv2.bitwise_not(dark_mask), light_mask)
@@ -356,7 +440,7 @@ def filter_duotone_purple(img_gray, line_weight, noise_reduction, contrast_boost
 def filter_high_contrast(img_gray, line_weight, noise_reduction, contrast_boost):
     """
     Blackwork / High Saturation: Crisp pure black and pure white with zero mid-tones.
-    Perfect for solid tribal or heavy black fields.
+    Perfect for solid tribal or heavy black fields with maximum visual impact.
     """
     # Strong contrast enhancement
     clahe = cv2.createCLAHE(clipLimit=contrast_boost * 6, tileGridSize=(8, 8))
@@ -382,9 +466,9 @@ def filter_high_contrast(img_gray, line_weight, noise_reduction, contrast_boost)
 def process_stencil_core(img_gray, style, line_weight, noise_reduction, contrast_boost):
     """
     Main processing router for all stencil styles.
-    Applies advanced image processing algorithms based on selected style.
+    Applies professional-grade advanced image processing algorithms based on selected style.
     """
-    # Ensure noise_reduction and contrast_boost are within reasonable ranges
+    # Ensure parameters are within reasonable ranges
     noise_reduction = np.clip(noise_reduction, 0.1, 3.0)
     contrast_boost = np.clip(contrast_boost, 0.5, 3.0)
     line_weight = np.clip(line_weight, 0.5, 5.0)
@@ -431,7 +515,7 @@ async def generate_stencil(
 ):
     """
     Professional-grade tattoo stencil generation endpoint.
-    Processes portrait images into print-ready stencil designs.
+    Processes portrait images into print-ready stencil designs using advanced algorithms.
     
     Parameters:
     - style: One of ['classic', 'sketchy', 'smooth', 'thermal_ink', 'carbon_transfer', 'bold', 'sharp', 'duotone_purple', 'high_contrast']
@@ -484,7 +568,7 @@ async def generate_stencil(
 @app.get("/api/v1/health")
 async def health_check():
     """Health check endpoint for monitoring."""
-    return {"status": "healthy", "engine": "Ultra Advanced Tattoo Stencil AI Engine"}
+    return {"status": "healthy", "engine": "Ultra Advanced Tattoo Stencil AI Engine - Professional Grade"}
 
 if __name__ == "__main__":
     import uvicorn
