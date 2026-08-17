@@ -1,0 +1,74 @@
+{
+  "engine_calibration_presets": {
+    "1_soft_portraits_babies_smooth_skin": [
+      { "name": "Ultra Soft Baby (Fine Line)", "skin_smoothness": 85, "detail_radius": 0.8, "edge_sensitivity": 0.98, "shadow_block": 21, "line_weight": 0 },
+      { "name": "Soft Portrait with Light Stippling", "skin_smoothness": 70, "detail_radius": 0.9, "edge_sensitivity": 0.97, "shadow_block": 15, "line_weight": 0 },
+      { "name": "High-Key Portrait (Washed out photo)", "skin_smoothness": 90, "detail_radius": 1.2, "edge_sensitivity": 0.99, "shadow_block": 35, "line_weight": 1 },
+      { "name": "Soft Portrait (Thick Outlines)", "skin_smoothness": 80, "detail_radius": 1.5, "edge_sensitivity": 0.98, "shadow_block": 25, "line_weight": 1 },
+      { "name": "Airbrushed Glamour Portrait", "skin_smoothness": 100, "detail_radius": 0.7, "edge_sensitivity": 0.96, "shadow_block": 11, "line_weight": -1 }
+    ],
+    "2_textured_portraits_elderly_wrinkles": [
+      { "name": "Deep Wrinkles & Heavy Texture", "skin_smoothness": 15, "detail_radius": 1.2, "edge_sensitivity": 0.96, "shadow_block": 11, "line_weight": 0 },
+      { "name": "Elderly Portrait (Fine Dotwork)", "skin_smoothness": 20, "detail_radius": 0.6, "edge_sensitivity": 0.94, "shadow_block": 7, "line_weight": 0 },
+      { "name": "Rugged Face (Harsh Lighting)", "skin_smoothness": 30, "detail_radius": 1.5, "edge_sensitivity": 0.97, "shadow_block": 41, "line_weight": 1 },
+      { "name": "High-Contrast Character Face", "skin_smoothness": 10, "detail_radius": 2.0, "edge_sensitivity": 0.98, "shadow_block": 15, "line_weight": 1 },
+      { "name": "Micro-Realism Textured Face", "skin_smoothness": 5, "detail_radius": 0.5, "edge_sensitivity": 0.93, "shadow_block": 5, "line_weight": -1 }
+    ],
+    "3_botanical_and_floral": [
+      { "name": "Crisp Hibiscus/Petal Veins", "skin_smoothness": 40, "detail_radius": 1.1, "edge_sensitivity": 0.96, "shadow_block": 17, "line_weight": 0 },
+      { "name": "Delicate Rose (Soft Edges)", "skin_smoothness": 60, "detail_radius": 0.8, "edge_sensitivity": 0.97, "shadow_block": 25, "line_weight": 0 },
+      { "name": "Bold Traditional Flower", "skin_smoothness": 50, "detail_radius": 2.5, "edge_sensitivity": 1.00, "shadow_block": 31, "line_weight": 2 },
+      { "name": "Fine-Line Micro Flora", "skin_smoothness": 20, "detail_radius": 0.5, "edge_sensitivity": 0.95, "shadow_block": 9, "line_weight": -1 },
+      { "name": "Leaf & Botanical Silhouette", "skin_smoothness": 80, "detail_radius": 3.0, "edge_sensitivity": 1.02, "shadow_block": 51, "line_weight": 1 }
+    ],
+    "4_intricate_geometric_mandala": [
+      { "name": "Aztec Calendar (Razor Sharp)", "skin_smoothness": 0, "detail_radius": 1.0, "edge_sensitivity": 0.98, "shadow_block": 15, "line_weight": 0 },
+      { "name": "Fine Line Mandala", "skin_smoothness": 5, "detail_radius": 0.6, "edge_sensitivity": 0.99, "shadow_block": 21, "line_weight": -1 },
+      { "name": "Bold Sacred Geometry", "skin_smoothness": 10, "detail_radius": 2.0, "edge_sensitivity": 1.00, "shadow_block": 35, "line_weight": 2 },
+      { "name": "Architecture/Buildings", "skin_smoothness": 15, "detail_radius": 1.5, "edge_sensitivity": 0.97, "shadow_block": 25, "line_weight": 1 },
+      { "name": "Faded/Old Artifact Blueprint", "skin_smoothness": 5, "detail_radius": 0.8, "edge_sensitivity": 0.94, "shadow_block": 11, "line_weight": 0 }
+    ],
+    "5_mythology_statues_stone": [
+      { "name": "Poseidon/Zeus Beard & Hair", "skin_smoothness": 25, "detail_radius": 1.3, "edge_sensitivity": 0.96, "shadow_block": 19, "line_weight": 0, "useStructureTensor": true },
+      { "name": "Marble Statue (Smooth & Stippled)", "skin_smoothness": 55, "detail_radius": 0.9, "edge_sensitivity": 0.95, "shadow_block": 13, "line_weight": 0 },
+      { "name": "Cracked Stone Texture", "skin_smoothness": 10, "detail_radius": 0.7, "edge_sensitivity": 0.93, "shadow_block": 7, "line_weight": 0 },
+      { "name": "Greek Bust (High Contrast)", "skin_smoothness": 40, "detail_radius": 1.8, "edge_sensitivity": 0.98, "shadow_block": 45, "line_weight": 1 },
+      { "name": "Dark Statue (Shadow Recovery)", "skin_smoothness": 30, "detail_radius": 1.1, "edge_sensitivity": 0.94, "shadow_block": 31, "line_weight": 0 }
+    ],
+    "6_stippling_and_dotwork_focus": [
+      { "name": "Heavy Stippling (Whip Shading Look)", "skin_smoothness": 15, "detail_radius": 0.5, "edge_sensitivity": 0.90, "shadow_block": 5, "line_weight": 0, "shadingMode": "dither" },
+      { "name": "Medium Dotwork", "skin_smoothness": 30, "detail_radius": 0.7, "edge_sensitivity": 0.93, "shadow_block": 9, "line_weight": 0, "shadingMode": "dither" },
+      { "name": "Fine Pepper Shading", "skin_smoothness": 45, "detail_radius": 0.6, "edge_sensitivity": 0.95, "shadow_block": 15, "line_weight": -1, "shadingMode": "dither" },
+      { "name": "Dotwork Gradient", "skin_smoothness": 20, "detail_radius": 0.8, "edge_sensitivity": 0.92, "shadow_block": 11, "line_weight": 0, "shadingMode": "dither" },
+      { "name": "Harsh Noise/Grain Shading", "skin_smoothness": 0, "detail_radius": 0.5, "edge_sensitivity": 0.88, "shadow_block": 5, "line_weight": 1, "shadingMode": "dither" }
+    ],
+    "7_animal_and_pet_portraits": [
+      { "name": "Fine Cat/Dog Fur", "skin_smoothness": 10, "detail_radius": 0.6, "edge_sensitivity": 0.95, "shadow_block": 9, "line_weight": -1, "useStructureTensor": true },
+      { "name": "Coarse Fur (Wolf/Bear)", "skin_smoothness": 20, "detail_radius": 1.2, "edge_sensitivity": 0.96, "shadow_block": 15, "line_weight": 0, "useStructureTensor": true },
+      { "name": "Reptile Scales/Snake", "skin_smoothness": 15, "detail_radius": 1.5, "edge_sensitivity": 0.98, "shadow_block": 21, "line_weight": 1 },
+      { "name": "Bird Feathers", "skin_smoothness": 25, "detail_radius": 0.9, "edge_sensitivity": 0.96, "shadow_block": 13, "line_weight": 0 },
+      { "name": "Smooth Animal (Dolphin/Frog)", "skin_smoothness": 70, "detail_radius": 1.1, "edge_sensitivity": 0.99, "shadow_block": 35, "line_weight": 1 }
+    ],
+    "8_traditional_and_neo_traditional": [
+      { "name": "Classic Trad (Spit Shade Look)", "skin_smoothness": 60, "detail_radius": 2.5, "edge_sensitivity": 1.02, "shadow_block": 41, "line_weight": 2 },
+      { "name": "Neo-Trad Bold Outlines", "skin_smoothness": 50, "detail_radius": 2.0, "edge_sensitivity": 1.00, "shadow_block": 31, "line_weight": 1 },
+      { "name": "Clean Flash Art", "skin_smoothness": 80, "detail_radius": 1.8, "edge_sensitivity": 0.99, "shadow_block": 25, "line_weight": 1 },
+      { "name": "Japanese Trad (Irezumi Flow)", "skin_smoothness": 40, "detail_radius": 1.6, "edge_sensitivity": 0.98, "shadow_block": 35, "line_weight": 1 },
+      { "name": "Chicano Style (Soft black & grey)", "skin_smoothness": 35, "detail_radius": 1.0, "edge_sensitivity": 0.95, "shadow_block": 19, "line_weight": 0 }
+    ],
+    "9_problem_solving_poor_photos": [
+      { "name": "Fix Washout/Low Contrast", "skin_smoothness": 40, "detail_radius": 1.5, "edge_sensitivity": 0.99, "shadow_block": 51, "line_weight": 1 },
+      { "name": "Fix Dark/Underexposed", "skin_smoothness": 30, "detail_radius": 0.8, "edge_sensitivity": 0.92, "shadow_block": 7, "line_weight": 0 },
+      { "name": "Reduce Harsh Flash Glare", "skin_smoothness": 60, "detail_radius": 1.2, "edge_sensitivity": 0.97, "shadow_block": 25, "line_weight": 0 },
+      { "name": "Bypass Heavy Image Noise", "skin_smoothness": 90, "detail_radius": 1.8, "edge_sensitivity": 1.00, "shadow_block": 31, "line_weight": 1 },
+      { "name": "Enhance Faded Tattoos", "skin_smoothness": 20, "detail_radius": 1.4, "edge_sensitivity": 0.98, "shadow_block": 15, "line_weight": 1 }
+    ],
+    "10_lettering_and_script": [
+      { "name": "Fine Line Script", "skin_smoothness": 50, "detail_radius": 1.0, "edge_sensitivity": 0.98, "shadow_block": 21, "line_weight": 0 },
+      { "name": "Chicano Calligraphy", "skin_smoothness": 30, "detail_radius": 1.5, "edge_sensitivity": 0.99, "shadow_block": 25, "line_weight": 1 },
+      { "name": "Gothic/Old English", "skin_smoothness": 20, "detail_radius": 2.0, "edge_sensitivity": 1.00, "shadow_block": 31, "line_weight": 1 },
+      { "name": "Typewriter Font", "skin_smoothness": 10, "detail_radius": 0.8, "edge_sensitivity": 0.96, "shadow_block": 11, "line_weight": 0 },
+      { "name": "Bold Block Letters", "skin_smoothness": 40, "detail_radius": 2.5, "edge_sensitivity": 1.02, "shadow_block": 41, "line_weight": 2 }
+    ]
+  }
+}
